@@ -1,0 +1,74 @@
+# Core Framework
+langgraph>=0.2.0
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-community>=0.3.0
+langsmith>=0.1.0
+
+# Document Processing
+unstructured[all-docs]>=0.15.0
+pypdf>=4.0.0
+pymupdf>=1.24.0
+pdfplumber>=0.11.0
+python-docx>=1.1.0
+openpyxl>=3.1.0
+python-magic>=0.4.27
+python-magic-bin>=0.4.14; sys_platform == 'win32'
+
+# OCR
+pytesseract>=0.3.10
+Pillow>=10.0.0
+
+# NLP & Entity Extraction
+spacy>=3.7.0
+transformers>=4.40.0
+torch>=2.3.0
+sentence-transformers>=3.0.0
+
+# Knowledge Graph
+neo4j>=5.20.0
+networkx>=3.3
+pyvis>=0.3.2
+
+# Vector Store
+chromadb>=0.5.0
+tiktoken>=0.7.0
+
+# Utilities
+pydantic>=2.7.0
+pydantic-settings>=2.5.0
+python-dotenv>=1.0.0
+loguru>=0.7.0
+rich>=13.0.0
+typer>=0.12.0
+tqdm>=4.66.0
+
+# Data Processing
+pandas>=2.2.0
+numpy>=1.26.0
+
+# Web & API
+fastapi>=0.111.0
+uvicorn>=0.30.0
+httpx>=0.27.0
+websockets>=12.0
+
+# Fase 4 - Reports
+reportlab>=4.0.0
+
+# Fase 5 - UI
+streamlit>=1.34.0
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.24.0
+
+# Optional - Timeline (Fase 2)
+dateparser>=1.2.0
+
+# Optional - Pattern (Fase 3)
+vaderSentiment>=3.3.2
+textblob>=0.18.0
+
+# Steganography (Fase C)
+stegano>=1.3
