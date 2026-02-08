@@ -20,11 +20,19 @@ class Settings(BaseSettings):
     GRAPHS_DIR: Path = DATA_DIR / "graphs"
     REPORTS_DIR: Path = DATA_DIR / "reports"
     KNOWLEDGE_BASE_DIR: Path = DATA_DIR / "knowledge_base"
+    INVESTIGATIONS_DIR: Path = DATA_DIR / "investigations"
+    LEDGER_DB_PATH: Path = DATA_DIR / "processing_ledger.db"
+    REDIS_URL: Optional[str] = None  # e.g. redis://localhost:6379 for incremental queues
 
     OPENAI_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-1.5-flash"
     LLM_MODEL: str = "gpt-4o-mini"
     LLM_TEMPERATURE: float = 0.1
+
+    EMBEDDING_PROVIDER: str = "local"  # "local" | "openai"
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
 
     NEO4J_URI: str = "bolt://localhost:7687"
     NEO4J_USER: str = "neo4j"
@@ -92,7 +100,7 @@ class Settings(BaseSettings):
         for dir_path in [
             self.DATA_DIR, self.UPLOADS_DIR, self.PROCESSED_DIR,
             self.QUARANTINE_DIR, self.EMBEDDINGS_DIR, self.GRAPHS_DIR,
-            self.REPORTS_DIR, self.KNOWLEDGE_BASE_DIR,
+            self.REPORTS_DIR, self.KNOWLEDGE_BASE_DIR, self.INVESTIGATIONS_DIR,
         ]:
             dir_path.mkdir(parents=True, exist_ok=True)
 

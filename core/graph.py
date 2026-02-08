@@ -1,5 +1,13 @@
 """
 SHERLOCK - LangGraph workflow with optional checkpointing.
+
+Agent call flow (orchestration):
+- No agent calls another directly. The LangGraph runtime invokes the next node after each
+  process(state) returns. Communication between agents is only via shared InvestigationState.
+- Pipeline sequence: ingest_documents -> classify_documents -> extract_entities ->
+  cryptanalysis_hunter -> semantic_linker -> timeline -> pattern_recognition ->
+  build_knowledge_graph -> synthesis -> odos_guardian -> conditional (report|refinement|blocked) -> END.
+- After odos_guardian, _after_guardian_route maps odos_status to report, refinement, or blocked; all go to END.
 """
 
 import uuid

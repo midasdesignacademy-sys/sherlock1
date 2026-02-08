@@ -153,10 +153,20 @@ class Hypothesis(BaseModel):
     status: str = "under_review"
 
 
+class Conflict(TypedDict, total=False):
+    """Spec §5: conflict_id, type (DUPLICATES|CONTRADICTIONS|AMBIGUITY), existing, new, confidence, resolution."""
+    conflict_id: str
+    type: str  # DUPLICATES | CONTRADICTIONS | AMBIGUITY
+    existing: Dict[str, Any]
+    new: Dict[str, Any]
+    confidence: float
+    resolution: str  # pending | MERGE | KEEP_BOTH | IGNORE
+
+
 class InvestigationState(TypedDict, total=False):
     """
     Central state for the SHERLOCK investigation workflow (Soul-aligned).
-    Passed between all agents in the LangGraph.
+    Spec §2: version, last_updated, processing_queue, delta_log, conflicts for incremental.
     """
     raw_documents: List[Dict[str, Any]]
     processed_docs: List[Dict[str, Any]]
@@ -196,6 +206,12 @@ class InvestigationState(TypedDict, total=False):
     human_feedback: Optional[str]
     error_log: List[str]
     config: Dict[str, Any]
+    # Spec §2 - Estado evolutivo (incremental)
+    version: int
+    last_updated: Optional[str]
+    processing_queue: List[str]
+    delta_log: List[Dict[str, Any]]
+    conflicts: List[Dict[str, Any]]
 
 
 def create_initial_state(config_override: Optional[Dict[str, Any]] = None) -> InvestigationState:
@@ -239,4 +255,9 @@ def create_initial_state(config_override: Optional[Dict[str, Any]] = None) -> In
         human_feedback=None,
         error_log=[],
         config=config_override or {},
+        version=1,
+        last_updated=None,
+        processing_queue=[],
+        delta_log=[],
+        conflicts=[],
     )

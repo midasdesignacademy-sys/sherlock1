@@ -20,11 +20,15 @@ data/processed/*
 data/embeddings/*
 data/graphs/*
 data/reports/*
+data/investigations/*
+data/knowledge_base/*
 !data/uploads/.gitkeep
 !data/processed/.gitkeep
 !data/embeddings/.gitkeep
 !data/graphs/.gitkeep
 !data/reports/.gitkeep
+!data/investigations/.gitkeep
+!data/knowledge_base/.gitkeep
 
 # IDEs
 .vscode/
@@ -36,6 +40,10 @@ data/reports/*
 # Logs
 *.log
 sherlock.log
+
+# Node / Frontend
+node_modules/
+frontend/node_modules/
 
 # OS
 .DS_Store

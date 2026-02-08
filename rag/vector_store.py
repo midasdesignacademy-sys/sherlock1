@@ -42,7 +42,7 @@ def add_chunks(
     doc_id: str,
     chunks: List[str],
     chunk_ids: Optional[List[str]] = None,
-    embeddings: Optional[List[List[float]] = None,
+    embeddings: Optional[List[List[float]]] = None,
     model=None,
     collection=None,
 ) -> None:

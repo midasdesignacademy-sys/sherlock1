@@ -79,6 +79,27 @@ def process(state: InvestigationState) -> InvestigationState:
         state["odos_status"] = final_status
         state["compliance_report"] = cr
 
+        # Optional LLM narrative when GEMINI_API_KEY is set
+        try:
+            from core.llm import get_llm
+            from langchain_core.messages import HumanMessage
+            llm = get_llm()
+            if llm is not None:
+                violations_summary = "; ".join(
+                    f"{v.get('type', '')}({v.get('count', 0)})" for v in (state.get("odos_violations") or [])
+                ) or "none"
+                prompt = (
+                    "Em 2-3 frases, resume o resultado da verificação ODOS: "
+                    f"violações={violations_summary}, fidelity={fidelity:.2f}, rcf={rcf:.2f}, "
+                    f"delta_e={guardian_result.delta_e:.3f}, status={cr.get('overall_status', '')}. "
+                    "Linguagem neutra e executiva."
+                )
+                msg = llm.invoke([HumanMessage(content=prompt[:4000])])
+                if getattr(msg, "content", None):
+                    cr["narrative"] = msg.content.strip()
+        except Exception as e:
+            logger.warning(f"ODOS Guardian LLM narrative skipped: {e}")
+
         state["current_step"] = "odos_guardian_complete"
         logger.info(
             f"[Agent 10] ODOS={final_status}, guardian_delta_e={guardian_result.delta_e:.3f}, "

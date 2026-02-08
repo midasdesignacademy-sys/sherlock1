@@ -40,15 +40,22 @@ Run the FastAPI backend for monitored investigations and activity feed:
  uvicorn api.main:app --host 0.0.0.0 --port 8001
 ```
 
-Endpoints: `GET /health`, `POST /investigate`, `GET /runs` (list), `GET /runs/{run_id}` (`?full=1` for full state), `POST /search` (hybrid search), `GET /events`, `GET /events/stream` (SSE), `GET /memory/patterns`, `GET /memory/episodes`, `GET /memory/history` (Fase 5), `WebSocket /ws`.
+Endpoints: `GET /health`, `POST /investigate`, `GET /runs` (list), `GET /runs/{run_id}` (`?full=1` for full state), `POST /search` (hybrid search; body may include `investigation_id`), `GET /events`, `GET /events/stream` (SSE), `GET /memory/patterns`, `GET /memory/episodes`, `GET /memory/history` (Fase 5), `WebSocket /ws`.
 
-## UI (Fase 5)
+**Investigações incrementais (Sprint 1):** `POST /investigations` (body: `name?`, `uploads_path?` — cria investigação e opcionalmente roda pipeline e persiste estado), `GET /investigations`, `GET /investigations/{id}`, `GET /investigations/{id}/state` (`?full=0` para resumo).
 
+## UI
+
+**Dashboard legado (abas):**
 ```bash
  streamlit run ui/dashboard.py
 ```
 
-Use "Run via API (monitored)" and the Activity tab when the API is running.
+**UI MVP multipágina (investigações, Dashboard, Entities, Search, Graph, Timeline, etc.):**
+```bash
+ streamlit run ui/streamlit/app.py
+```
+Requer API em execução (`uvicorn api.main:app --port 8001`). No Dashboard, crie uma investigação (nome + path para `data/uploads`) e use as páginas com a investigação selecionada na sidebar.
 
 ## Tests
 
@@ -71,14 +78,19 @@ Ingest → Classify → Entity extraction → Cryptanalysis → Semantic linker 
 ## Structure
 
 - `agents/` – Agents 1–10 (ingestion, classifier, entity, crypto, semantic, timeline, pattern, knowledge graph, synthesis, ODOS).
-- `core/` – State, config, graph, monitors, graph_enhanced.
+- `core/` – State, config, graph, monitors, graph_enhanced, investigation_store (persistência de investigações).
 - `api/` – FastAPI app, WebSocket events.
+- `ui/streamlit/` – UI MVP multipágina (Dashboard, Entities, Documents, Graph, Timeline, Search, Hypotheses, PQMS, Reports).
 - `rag/` – Embeddings, Chroma vector store, indexer.
 - `knowledge_graph/` – Neo4j client, graph builder, pyvis visualizer.
 - `cryptanalysis/` – Detectors, decoders, frequency, steganography.
 - `pqms/` – ODOS, Guardian, Fidelity (rules-based).
 - `core/memory/` – STM, LTM, Episodic, consolidation (Fase 3); MemoryManager + semantic query (Fase 5).
 - `rag/hybrid_search.py` – Vector + graph hybrid search (Fase 2).
+
+## Investigações incrementais (plano)
+
+Sprint 1 concluído: estado evolutivo (version, conflicts, etc.), store em `data/investigations/`, APIs `POST/GET /investigations` e `GET /investigations/{id}/state`, UI Streamlit multipágina. Próximos sprints: Redis + 202 job_id, Entity Resolution, Graph Merger, DeltaTracker, conflitos e ConflictResolver. Ver plano em `.cursor/plans/` ou documento "Investigações incrementais e frontend" para checklists por sprint.
 
 ## Limitações conhecidas
 

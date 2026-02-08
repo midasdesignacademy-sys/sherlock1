@@ -1,5 +1,14 @@
 """
 SHERLOCK - Monitored workflow: same graph with activity emission for real-time UI.
+
+Agent call flow (orchestration):
+- No agent calls another directly. The LangGraph runtime invokes the next node after each
+  process(state) returns. Communication between agents is only via shared InvestigationState.
+- Pipeline sequence: ingest_documents -> classify_documents -> extract_entities ->
+  cryptanalysis_hunter -> semantic_linker -> timeline -> pattern_recognition ->
+  build_knowledge_graph -> synthesis -> odos_guardian -> (report|refinement|blocked) -> END.
+- Same node order and edges as core.graph.create_sherlock_graph; this module wraps each
+  node with ActivityMonitor emission for the API/UI.
 """
 
 from langgraph.graph import StateGraph, END
@@ -30,13 +39,14 @@ def wrap_agent(agent_name: str, process_fn):
 
     def wrapped(state: InvestigationState) -> InvestigationState:
         monitor = ActivityMonitor()
-        monitor.emit(agent_name, "start", docs=len(state.get("document_metadata", {})))
+        investigation_id = (state.get("config") or {}).get("investigation_id")
+        monitor.emit(agent_name, "start", investigation_id=investigation_id, docs=len(state.get("document_metadata", {})))
         try:
             out = process_fn(state)
-            monitor.emit(agent_name, "end", docs=len(out.get("document_metadata", {})))
+            monitor.emit(agent_name, "end", investigation_id=investigation_id, docs=len(out.get("document_metadata", {})))
             return out
         except Exception as e:
-            monitor.emit(agent_name, "error", error=str(e))
+            monitor.emit(agent_name, "error", investigation_id=investigation_id, error=str(e))
             raise
 
     return wrapped
@@ -76,19 +86,21 @@ def create_monitored_graph():
     workflow.add_edge("pattern_recognition", "build_knowledge_graph")
     workflow.add_edge("build_knowledge_graph", "synthesis")
     workflow.add_edge("synthesis", "odos_guardian")
-    workflow.add_conditional_edges("odos_guardian", _after_guardian_route, {"report": END, "refinement": END})
+    workflow.add_conditional_edges("odos_guardian", _after_guardian_route, {"report": END, "refinement": END, "blocked": END})
 
     return workflow.compile()
 
 
-def run_monitored_investigation(documents_path: str = None) -> InvestigationState:
+def run_monitored_investigation(documents_path: str = None, investigation_id: str = None) -> InvestigationState:
     """Run investigation with activity monitoring; returns final state."""
     logger.info("SHERLOCK - Starting monitored investigation")
     ActivityMonitor().clear()
     initial = create_initial_state()
+    initial["config"] = initial.get("config") or {}
     if documents_path:
-        initial["config"] = initial.get("config") or {}
         initial["config"]["uploads_path"] = documents_path
+    if investigation_id:
+        initial["config"]["investigation_id"] = investigation_id
     app = create_monitored_graph()
     final_state = app.invoke(initial)
     _print_summary(final_state)

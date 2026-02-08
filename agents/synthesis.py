@@ -155,6 +155,21 @@ class IntelligenceSynthesisAgent:
 
             # Soul: report_summary (narrative)
             state["report_summary"] = _build_report_summary(state, hypotheses, leads)
+            # Optional LLM enrichment when GEMINI_API_KEY is set
+            try:
+                from core.llm import get_llm
+                from langchain_core.messages import HumanMessage
+                llm = get_llm()
+                if llm is not None:
+                    prompt = (
+                        "Reescreve o seguinte resumo de investigação de forma fluida e executiva em 2-3 parágrafos, "
+                        "mantendo factos e números.\n\n" + (state["report_summary"] or "")
+                    )
+                    msg = llm.invoke([HumanMessage(content=prompt[:8000])])
+                    if getattr(msg, "content", None):
+                        state["report_summary"] = msg.content.strip()
+            except Exception as e:
+                logger.warning(f"LLM report_summary enrichment skipped: {e}")
 
             # Write report files
             reports_dir = settings.REPORTS_DIR

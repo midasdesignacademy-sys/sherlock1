@@ -27,21 +27,25 @@ class ActivityMonitor:
         self._events: deque = deque(maxlen=500)
         self._events_lock = threading.Lock()
 
-    def emit(self, agent: str, step: str, **kwargs: Any) -> None:
-        """Append an event: agent name, step (start/end), optional payload."""
+    def emit(self, agent: str, step: str, investigation_id: Optional[str] = None, **kwargs: Any) -> None:
+        """Append an event: agent name, step (start/end), optional investigation_id and payload."""
         event: Dict[str, Any] = {
             "agent": agent,
             "step": step,
             "timestamp": datetime.utcnow().isoformat() + "Z",
+            "investigation_id": investigation_id,
             "payload": dict(kwargs) if kwargs else {},
         }
         with self._events_lock:
             self._events.append(event)
 
-    def get_recent(self, n: int = 50) -> List[Dict[str, Any]]:
-        """Return the last n events (newest last)."""
+    def get_recent(self, n: int = 50, investigation_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Return the last n events (newest last). If investigation_id is set, filter by it."""
         with self._events_lock:
-            return list(self._events)[-n:]
+            events = list(self._events)[-n:]
+        if investigation_id:
+            events = [e for e in events if e.get("investigation_id") == investigation_id]
+        return events
 
     def clear(self) -> None:
         """Clear all events."""

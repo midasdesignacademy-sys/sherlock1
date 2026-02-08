@@ -18,6 +18,13 @@ from loguru import logger
 
 from core.state import InvestigationState, DocumentMetadata
 from core.config import settings
+from core.persistence import (
+    get_doc_status,
+    log_doc_start,
+    log_doc_success,
+    log_doc_failed,
+    STATUS_DONE,
+)
 
 try:
     import magic
@@ -134,7 +141,18 @@ class DocumentIngestionAgent:
                 state["error_log"] = state.get("error_log", []) + [f"Upload dir not found: {upload_dir}"]
                 return state
 
-            files = [f for f in upload_dir.iterdir() if f.is_file()]
+            user_descriptions: Dict[str, str] = {}
+            desc_path = Path(upload_dir) / "descriptions.json"
+            if desc_path.exists():
+                try:
+                    import json
+                    data = json.loads(desc_path.read_text(encoding="utf-8"))
+                    if isinstance(data, dict):
+                        user_descriptions = {k: str(v) for k, v in data.items() if v and k != "descriptions.json"}
+                except Exception:
+                    pass
+
+            files = [f for f in upload_dir.iterdir() if f.is_file() and f.name != "descriptions.json"]
             if not files:
                 logger.warning("No files found in uploads directory")
                 state["error_log"] = state.get("error_log", []) + ["No files to ingest"]
@@ -152,6 +170,7 @@ class DocumentIngestionAgent:
             extracted_text = dict(state.get("extracted_text", {}))
             raw_documents = list(state.get("raw_documents", []))
             cryptography_findings = list(state.get("cryptography_findings", []))
+            investigation_id = (state.get("config") or {}).get("investigation_id") or ""
 
             for file_path in files:
                 if file_path.suffix.lower() not in self.supported:
@@ -165,70 +184,84 @@ class DocumentIngestionAgent:
                 if file_hash in existing_hashes:
                     logger.info(f"Skipping duplicate: {file_path.name}")
                     continue
+                if get_doc_status(file_hash, investigation_id) == STATUS_DONE:
+                    logger.info(f"Skipping already processed (ledger DONE): {file_path.name}")
+                    continue
                 existing_hashes.add(file_hash)
 
-                file_type = _detect_file_type(file_path)
-                doc_id = file_hash[:16]
-                t0 = time.perf_counter()
+                log_doc_start(file_hash, investigation_id)
+                try:
+                    file_type = _detect_file_type(file_path)
+                    doc_id = file_hash[:16]
+                    t0 = time.perf_counter()
 
-                text_content, status, extraction_method, ocr_confidence, page_count, meta_extra, crypto_finding = self._process_one(
-                    file_path, file_type, doc_id
-                )
+                    text_content, status, extraction_method, ocr_confidence, page_count, meta_extra, crypto_finding = self._process_one(
+                        file_path, file_type, doc_id
+                    )
 
-                processing_time_ms = int((time.perf_counter() - t0) * 1000)
+                    processing_time_ms = int((time.perf_counter() - t0) * 1000)
 
-                if status == "encrypted" and crypto_finding:
-                    cryptography_findings.append(crypto_finding)
+                    if status == "encrypted" and crypto_finding:
+                        cryptography_findings.append(crypto_finding)
 
-                if status == "failed":
-                    _quarantine_file(file_path, meta_extra.get("error_message", "extraction failed"))
+                    if status == "failed":
+                        _quarantine_file(file_path, meta_extra.get("error_message", "extraction failed"))
 
-                if not text_content and status not in ("encrypted", "failed"):
-                    status = "partial" if status == "success" else status
-                    text_content = ""
+                    if not text_content and status not in ("encrypted", "failed"):
+                        status = "partial" if status == "success" else status
+                        text_content = ""
 
-                text_content = _normalize_text(text_content) if text_content else ""
-                language = _detect_language(text_content) if text_content else "unknown"
+                    text_content = _normalize_text(text_content) if text_content else ""
+                    language = _detect_language(text_content) if text_content else "unknown"
 
-                author, created, modified = self._extract_metadata_dates(file_path, file_type, file_path.suffix.lower())
-                meta_dict = meta_extra or {}
-                meta_dict.update({
-                    "author": author,
-                    "creation_date": created.isoformat() if created else None,
-                    "modification_date": modified.isoformat() if modified else None,
-                    "title": None,
-                    "producer": None,
-                })
+                    author, created, modified = self._extract_metadata_dates(file_path, file_type, file_path.suffix.lower())
+                    meta_dict = meta_extra or {}
+                    meta_dict.update({
+                        "author": author,
+                        "creation_date": created.isoformat() if created else None,
+                        "modification_date": modified.isoformat() if modified else None,
+                        "title": None,
+                        "producer": None,
+                    })
+                    user_desc = user_descriptions.get(file_path.name, "").strip()
+                    if user_desc:
+                        meta_dict["user_description"] = user_desc
 
-                meta = DocumentMetadata(
-                    doc_id=doc_id,
-                    filename=file_path.name,
-                    file_type=file_type,
-                    file_hash=file_hash,
-                    size_bytes=file_path.stat().st_size,
-                    upload_timestamp=datetime.now(),
-                    source=str(file_path.parent),
-                    language=language,
-                    author=author,
-                    created=created,
-                    modified=modified,
-                    file_path=str(file_path),
-                    status=status,
-                    extraction_method=extraction_method,
-                    ocr_confidence=ocr_confidence,
-                    processing_time_ms=processing_time_ms,
-                    page_count=page_count,
-                    error_message=meta_extra.get("error_message") if isinstance(meta_extra, dict) else None,
-                    metadata=meta_dict if isinstance(meta_dict, dict) else None,
-                )
-                document_metadata[doc_id] = meta.model_dump()
-                extracted_text[doc_id] = text_content
-                processed_docs.append({"doc_id": doc_id, "text": text_content, "metadata": meta.model_dump()})
-                raw_documents.append({"doc_id": doc_id, "file_path": str(file_path), "metadata": meta.model_dump()})
-                if status == "success" or status == "partial":
-                    logger.info(f"Ingested: {file_path.name} ({len(text_content)} chars, {extraction_method})")
-                else:
-                    logger.warning(f"Document {file_path.name}: status={status}")
+                    meta = DocumentMetadata(
+                        doc_id=doc_id,
+                        filename=file_path.name,
+                        file_type=file_type,
+                        file_hash=file_hash,
+                        size_bytes=file_path.stat().st_size,
+                        upload_timestamp=datetime.now(),
+                        source=str(file_path.parent),
+                        language=language,
+                        author=author,
+                        created=created,
+                        modified=modified,
+                        file_path=str(file_path),
+                        status=status,
+                        extraction_method=extraction_method,
+                        ocr_confidence=ocr_confidence,
+                        processing_time_ms=processing_time_ms,
+                        page_count=page_count,
+                        error_message=meta_extra.get("error_message") if isinstance(meta_extra, dict) else None,
+                        metadata=meta_dict if isinstance(meta_dict, dict) else None,
+                    )
+                    document_metadata[doc_id] = meta.model_dump()
+                    extracted_text[doc_id] = text_content
+                    processed_docs.append({"doc_id": doc_id, "text": text_content, "metadata": meta.model_dump()})
+                    raw_documents.append({"doc_id": doc_id, "file_path": str(file_path), "metadata": meta.model_dump()})
+                    if status == "success" or status == "partial":
+                        log_doc_success(file_hash, investigation_id)
+                        logger.info(f"Ingested: {file_path.name} ({len(text_content)} chars, {extraction_method})")
+                    else:
+                        log_doc_failed(file_hash, investigation_id, "ingest_documents")
+                        logger.warning(f"Document {file_path.name}: status={status}")
+                except Exception as e:
+                    log_doc_failed(file_hash, investigation_id, "ingest_documents")
+                    logger.exception(f"Document {file_path.name}: {e}")
+                    state["error_log"] = state.get("error_log", []) + [f"Ingestion doc error {file_path.name}: {str(e)}"]
 
             state["processed_docs"] = processed_docs
             state["document_metadata"] = document_metadata
